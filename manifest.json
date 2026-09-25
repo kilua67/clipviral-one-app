@@ -1,0 +1,16 @@
+{
+  "name": "ClipViral AI - USA Growth Engine",
+  "short_name": "ClipViral",
+  "description": "1 YouTube link = 8 viral Instagram clips with MrBeast hooks, auto-post for USA views",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#08080a",
+  "theme_color": "#08080a",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/1384/1384060.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

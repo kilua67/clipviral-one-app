@@ -1,0 +1,14 @@
+{
+  "name": "clipviral-one-app",
+  "version": "1.0.0",
+  "description": "ClipViral ONE APP - No backend, real cut, USA views",
+  "main": "index.html",
+  "scripts": {
+    "build": "echo 'No build needed - one app PWA'"
+  },
+  "dependencies": {
+    "@capacitor/core": "^5.5.1",
+    "@capacitor/android": "^5.5.1",
+    "@capacitor/cli": "^5.5.1"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "appId": "com.clipviral.oneapp",
+  "appName": "ClipViral ONE APP",
+  "webDir": ".",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    }
+  }
+}
