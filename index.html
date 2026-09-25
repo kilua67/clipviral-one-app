@@ -468,19 +468,22 @@ function renderClips(){
 async function renderClip(idx){
   const clip=generatedClips[idx]; if(clip.renderedUrl) return toast('Already rendered!'); 
   if(!sourceVideoFile && !currentVideo?.blobUrl){ 
-    // YouTube blocks browser download since mid-2025 - show helpful fix
+    // YouTube blocks browser download since mid-2025 - show helpful fix with WORKING sites
     const ytId = currentVideo?.id || getYouTubeIdFromUrl(document.getElementById('ytInput').value) || '';
     const ytUrl = `https://www.youtube.com/watch?v=${ytId}`;
-    const downloadUrl = `https://y2mate.is/youtube/${ytId}`;
-    const saveFromUrl = `https://en.savefrom.net/1-youtube-video-downloader-8/?url=${encodeURIComponent(ytUrl)}`;
+    const sites = [
+      `https://en.savefrom.net/1-youtube-video-downloader-8/?url=${encodeURIComponent(ytUrl)}`,
+      `https://10downloader.com/download/?url=${encodeURIComponent(ytUrl)}`,
+      `https://y2mate.is/`
+    ];
     
-    // Show modal with fix
-    if(confirm(`YouTube blocks browser download (since 2025, even cobalt main instance blocked) - this is YouTube's bot protection, not our app.\n\nQUICK FIX (5 sec, 100% works):\n1. Tap OK to open y2mate.is with your video\n2. Download MP4 (720p)\n3. Come back, go to UPLOAD 1-6 tab, upload that MP4\n4. Then RENDER works 100% real cut, no backend\n\nTap OK to open downloader, or Cancel to use TEST DEMO (always works)`)){
-      window.open(downloadUrl, '_blank');
-      toast('Opened y2mate - download MP4 then upload via UPLOAD tab for real render');
-    } else {
-      toast('Use TEST DEMO button (always works) or UPLOAD your video file for guaranteed real render');
-    }
+    // Show choice
+    const choice = prompt(`YouTube blocks browser download (YouTube bot protection since 2025).\n\nQUICK FIX - 100% works:\n1. Download MP4 from any site below (5 sec)\n2. Come back, UPLOAD 1-6 tab, upload MP4\n3. RENDER works real cut\n\nType 1, 2, or 3 to open downloader:\n1 = savefrom.net (best, paste auto)\n2 = 10downloader.com\n3 = y2mate.is\n\nOr Cancel to use TEST DEMO (always works, no download needed)`);
+    
+    if(choice==='1'){ window.open(sites[0], '_blank'); toast('Opened savefrom.net - download MP4 then upload via UPLOAD tab'); }
+    else if(choice==='2'){ window.open(sites[1], '_blank'); toast('Opened 10downloader - download MP4 then upload'); }
+    else if(choice==='3'){ window.open(sites[2], '_blank'); toast('Opened y2mate.is - paste your YouTube link there, download, then upload'); }
+    else { toast('Use TEST DEMO button (always works, no download) or UPLOAD your video file'); }
     return; 
   }
   const isAuto=autoMode; let bestCaptionStyle='beast', bestPunch=15, bestBroll=2.3;
