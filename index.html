@@ -490,29 +490,132 @@ async function renderClip(idx){
   let mOpts=null;
   if(isAuto){ if(clip.hook_score>95) bestCaptionStyle='hype'; else if(clip.hook_score>92) bestCaptionStyle='beast'; else bestCaptionStyle='white'; bestPunch=clip.duration>20?12:18; bestBroll=clip.duration>15?2.8:1.8; }
   else { mOpts=getManualOptions(); bestCaptionStyle=mOpts.captionStyle; bestPunch=mOpts.punch; bestBroll=mOpts.broll; }
-  toast(`Rendering ${idx+1}... ${isAuto?bestCaptionStyle+' '+bestPunch+'%':''} + ${selectedDualBg}`);
-  const sourceVideo=document.getElementById('sourceVideo'); const canvas=document.getElementById('renderCanvas'); const ctx=canvas.getContext('2d'); const gameplayCanvas=document.getElementById('gameplayCanvas'); const gameplayCtx=gameplayCanvas.getContext('2d');
-  canvas.width=1080; canvas.height=1920; gameplayCanvas.width=1080; gameplayCanvas.height=960; sourceVideo.currentTime=clip.start; await new Promise(r=>{ sourceVideo.onseeked=()=>r(); setTimeout(r,500); });
-  const stream=canvas.captureStream(30); try{ const audioTracks=sourceVideo.captureStream?sourceVideo.captureStream().getAudioTracks():[]; audioTracks.forEach(t=>stream.addTrack(t)); }catch(e){}
-  const mimeType=getSupportedMimeType(); const recorder=new MediaRecorder(stream, {mimeType, videoBitsPerSecond: 2500000}); const chunks=[]; recorder.ondataavailable=e=>{ if(e.data.size>0) chunks.push(e.data); };
+  toast(`Rendering ${idx+1} with SOUND... ${isAuto?bestCaptionStyle+' '+bestPunch+'%':''} + ${selectedDualBg} + 🔊 SFX`);
+
+  const sourceVideo=document.getElementById('sourceVideo');
+  const canvas=document.getElementById('renderCanvas'); const ctx=canvas.getContext('2d');
+  const gameplayCanvas=document.getElementById('gameplayCanvas'); const gameplayCtx=gameplayCanvas.getContext('2d');
+  canvas.width=1080; canvas.height=1920; gameplayCanvas.width=1080; gameplayCanvas.height=960; 
+  sourceVideo.currentTime=clip.start; 
+  await new Promise(r=>{ sourceVideo.onseeked=()=>r(); setTimeout(r,500); });
+  
+  // AUDIO FIX - Make like human edit with sound
+  // Unmute for recording, setup AudioContext for SFX + voice
+  sourceVideo.muted=false;
+  sourceVideo.volume=1.0;
+  let audioCtx, dest, sfxGain;
+  try{
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    dest = audioCtx.createMediaStreamDestination();
+    sfxGain = audioCtx.createGain();
+    sfxGain.gain.value=0.6;
+    sfxGain.connect(dest);
+    
+    // Connect sourceVideo audio to dest if possible
+    try{
+      const src = audioCtx.createMediaElementSource(sourceVideo);
+      src.connect(audioCtx.destination); // Play audio
+      src.connect(dest); // Record audio
+    }catch(e){ console.log('Audio source connect failed, using captureStream fallback'); }
+  }catch(e){ console.log('AudioContext failed', e); }
+
+  const canvasStream=canvas.captureStream(30);
+  let combinedStream;
+  try{
+    // Try to get audio from video element
+    let audioTracks=[];
+    if(sourceVideo.captureStream){
+      const vStream=sourceVideo.captureStream();
+      audioTracks=vStream.getAudioTracks();
+    } else if(sourceVideo.mozCaptureStream){
+      const vStream=sourceVideo.mozCaptureStream();
+      audioTracks=vStream.getAudioTracks();
+    }
+    
+    // If we have AudioContext dest, use its audio tracks + canvas video
+    if(dest && dest.stream.getAudioTracks().length>0){
+      combinedStream=new MediaStream([
+        ...canvasStream.getVideoTracks(),
+        ...dest.stream.getAudioTracks(),
+        ...audioTracks
+      ]);
+    } else if(audioTracks.length>0){
+      combinedStream=new MediaStream([
+        ...canvasStream.getVideoTracks(),
+        ...audioTracks
+      ]);
+    } else {
+      combinedStream=canvasStream;
+    }
+  }catch(e){
+    combinedStream=canvasStream;
+  }
+
+  const mimeType=getSupportedMimeType(); 
+  const recorder=new MediaRecorder(combinedStream, {mimeType, videoBitsPerSecond: 2500000, audioBitsPerSecond: 128000}); 
+  const chunks=[]; recorder.ondataavailable=e=>{ if(e.data.size>0) chunks.push(e.data); };
   const prom=new Promise(resolve=>{
     recorder.onstop=()=>{ const blob=new Blob(chunks, {type:'video/webm'}); const url=URL.createObjectURL(blob); clip.renderedUrl=url; clip.blobUrl=url; clip.autoApplied=isAuto?{captionStyle:bestCaptionStyle,punch:bestPunch,broll:bestBroll}:null; library.unshift({...clip, renderedUrl:url}); localStorage.setItem('clipviral_library', JSON.stringify(library)); renderClips(); renderLibrary(); resolve(url); toast(`Rendered ${idx+1}! ${isAuto?bestCaptionStyle:''} ✅`); if(editingIndex===idx){ document.getElementById('renderedVideoPreview').src=url; document.getElementById('renderedVideoPreview').classList.remove('hidden'); const dl=document.getElementById('downloadRendered'); dl.href=url; dl.download=`clip-${idx}.webm`; dl.classList.remove('hidden'); document.getElementById('renderStatusText').innerText=`Done! ${isAuto?bestCaptionStyle+' '+bestPunch+'%':''} + ${selectedDualBg}`; document.getElementById('renderProgress').style.width='100%'; } };
   }); recorder.start(); sourceVideo.play(); let pattern=0;
   function drawGameplay(){ pattern+=0.05; const bg=selectedDualBg; if(bg==='minecraft'){ gameplayCtx.fillStyle=`hsl(${120+Math.sin(pattern)*20}, 60%, 50%)`; gameplayCtx.fillRect(0,0,1080,960); gameplayCtx.fillStyle='white'; gameplayCtx.font='bold 48px Syne'; gameplayCtx.fillText('⛏️ MINECRAFT', 80, 400); } else if(bg==='subway'){ gameplayCtx.fillStyle=`hsl(${40}, 80%, 60%)`; gameplayCtx.fillRect(0,0,1080,960); gameplayCtx.fillStyle='black'; gameplayCtx.font='bold 48px Syne'; gameplayCtx.fillText('🏃 SUBWAY', 60, 430); } else if(bg==='gta'){ gameplayCtx.fillStyle='#222'; gameplayCtx.fillRect(0,0,1080,960); gameplayCtx.fillStyle='#FF0033'; gameplayCtx.font='bold 48px Syne'; gameplayCtx.fillText('🚗 GTA V', 60, 430); } else { gameplayCtx.fillStyle='#222'; gameplayCtx.fillRect(0,0,1080,960); } }
+  // SFX helpers - human edit sound design
+  function playSFX(type){
+    if(!audioCtx || !sfxGain) return;
+    try{
+      const now=audioCtx.currentTime;
+      if(type==='whoosh'){
+        const osc=audioCtx.createOscillator(); const gain=audioCtx.createGain(); const filter=audioCtx.createBiquadFilter();
+        osc.type='sawtooth'; osc.frequency.setValueAtTime(200, now); osc.frequency.exponentialRampToValueAtTime(800, now+0.15);
+        filter.type='lowpass'; filter.frequency.value=2000;
+        gain.gain.setValueAtTime(0, now); gain.gain.linearRampToValueAtTime(0.3, now+0.02); gain.gain.exponentialRampToValueAtTime(0.01, now+0.3);
+        osc.connect(filter); filter.connect(gain); gain.connect(sfxGain);
+        osc.start(now); osc.stop(now+0.3);
+      } else if(type==='pop'){
+        const osc=audioCtx.createOscillator(); const gain=audioCtx.createGain();
+        osc.type='sine'; osc.frequency.setValueAtTime(800, now); osc.frequency.exponentialRampToValueAtTime(1200, now+0.08);
+        gain.gain.setValueAtTime(0.4, now); gain.gain.exponentialRampToValueAtTime(0.01, now+0.12);
+        osc.connect(gain); gain.connect(sfxGain);
+        osc.start(now); osc.stop(now+0.12);
+      } else if(type==='riser'){
+        const osc=audioCtx.createOscillator(); const gain=audioCtx.createGain();
+        osc.type='sine'; osc.frequency.setValueAtTime(100, now); osc.frequency.exponentialRampToValueAtTime(1200, now+0.6);
+        gain.gain.setValueAtTime(0, now); gain.gain.linearRampToValueAtTime(0.25, now+0.1); gain.gain.linearRampToValueAtTime(0, now+0.6);
+        osc.connect(gain); gain.connect(sfxGain);
+        osc.start(now); osc.stop(now+0.6);
+      }
+    }catch(e){}
+  }
+
+  let lastPunchTime=-10, lastSfxTime=-10;
   function draw(){ 
-    if(sourceVideo.currentTime>=clip.end || sourceVideo.currentTime-clip.start>=clip.duration){ recorder.stop(); sourceVideo.pause(); return; } 
+    if(sourceVideo.currentTime>=clip.end || sourceVideo.currentTime-clip.start>=clip.duration){ recorder.stop(); sourceVideo.pause(); try{ audioCtx && audioCtx.close(); }catch(e){} return; } 
     const elapsed=sourceVideo.currentTime-clip.start; const progress=elapsed/clip.duration; 
     ctx.fillStyle='#000'; ctx.fillRect(0,0,1080,1920); 
     const enableDual=document.getElementById('enableDualScreen')?.checked && selectedDualBg!=='none'; 
     const aspect=sourceVideo.videoWidth/sourceVideo.videoHeight; const target=9/16; let sx,sy,sw,sh; 
     if(aspect>target){ sh=sourceVideo.videoHeight; sw=sh*target; sx=(sourceVideo.videoWidth-sw)/2; sy=0; } else { sw=sourceVideo.videoWidth; sh=sw/target; sx=0; sy=(sourceVideo.videoHeight-sh)/2; } 
     let zoom=1; 
+    let isPunchMoment=false;
     if(isAuto){ 
-      const shouldPunch=(elapsed % bestBroll) < 0.35; zoom=shouldPunch?1+bestPunch/100:1+(progress%0.3)*0.2; 
+      isPunchMoment=(elapsed % bestBroll) < 0.35; 
+      zoom=isPunchMoment?1+bestPunch/100:1+(progress%0.3)*0.2; 
+      // SFX for human edit
+      if(isPunchMoment && elapsed-lastSfxTime>bestBroll-0.2){
+        if(progress<0.3) playSFX('riser');
+        else if(Math.random()>0.5) playSFX('whoosh');
+        else playSFX('pop');
+        lastSfxTime=elapsed;
+      }
     } else { 
-      // Manual punch
       const m=mOpts; 
-      if(m && m.punch>0){ const shouldPunch=(elapsed % m.broll) < 0.35; zoom=shouldPunch?1+m.punch/100:1+(progress%0.3)*0.15; } 
+      if(m && m.punch>0){ 
+        isPunchMoment=(elapsed % m.broll) < 0.35; 
+        zoom=isPunchMoment?1+m.punch/100:1+(progress%0.3)*0.15; 
+        if(isPunchMoment && m.sfx && elapsed-lastSfxTime>m.broll-0.2){
+          playSFX(Math.random()>0.5?'whoosh':'pop');
+          lastSfxTime=elapsed;
+        }
+      } 
       else { zoom=1+(progress%0.3)*0.2; }
     } 
     const zsw=sw/zoom, zsh=sh/zoom; 
