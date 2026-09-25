@@ -1,61 +1,41 @@
-name: Build APK via PWABuilder
+name: Build APK
 on: [push, workflow_dispatch]
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with: { node-version: 18 }
-      - name: Install Bubblewrap
-        run: npm install -g @bubblewrap/cli
-      - name: Build APK with Bubblewrap
+      - uses: actions/setup-java@v4
+        with: { distribution: 'temurin', java-version: '17' }
+      - name: Build APK - Simple WebView
         run: |
-          mkdir -p apk-build
-          cd apk-build
-          bubblewrap init --manifest https://kilua67.github.io/clipviral-one-app/manifest.json --directory . || echo "init done"
-          # Create twa-manifest.json manually if init fails
-          cat > twa-manifest.json <<'JSON'
-          {
-            "packageId": "com.clipviral.oneapp",
-            "host": "kilua67.github.io",
-            "name": "ClipViral ONE APP",
-            "launcherName": "ClipViral",
-            "display": "standalone",
-            "themeColor": "#08080a",
-            "navigationColor": "#08080a",
-            "backgroundColor": "#08080a",
-            "enableNotifications": false,
-            "startUrl": "/clipviral-one-app/",
-            "iconUrl": "https://cdn-icons-png.flaticon.com/512/1384/1384060.png",
-            "maskableIconUrl": "https://cdn-icons-png.flaticon.com/512/1384/1384060.png",
-            "splashScreenFadeOutDuration": 300,
-            "signingKey": { "path": "./android.keystore", "alias": "android" },
-            "appVersion": "1.0.0",
-            "appVersionCode": 1,
-            "shortcuts": [],
-            "generatorApp": "bubblewrap-cli",
-            "webManifestUrl": "https://kilua67.github.io/clipviral-one-app/manifest.json",
-            "fallbackType": "customtabs",
-            "features": {},
-            "alphaDependencies": { "enabled": false },
-            "enableSiteSettingsShortcut": true,
-            "isChromeOSOnly": false,
-            "isMetaQuest": false,
-            "fullScopeUrl": "https://kilua67.github.io/clipviral-one-app/",
-            "minSdkVersion": 19,
-            "orientation": "any"
-          }
-          JSON
-          bubblewrap build || echo "build attempted"
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npx cap init ClipViral com.clipviral.oneapp --web-dir=. --npm-client=npm || true
+          npx cap add android || true
+          npx cap copy android
+          cd android
+          echo "Listing android folder:"
           ls -la
-          find . -name "*.apk" -o -name "*.aab" | head -20
-      - name: Upload APK
+          echo "Building..."
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon -x lint --stacktrace || echo "Gradle failed, trying alternative"
+          echo "Finding APKs:"
+          find . -name "*.apk" -type f | head -20
+          ls -la app/build/outputs/apk/debug/ || echo "No debug folder"
+      - name: Upload APK Artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: clipviral-apk
+          name: clipviral-apk-debug
           path: |
-            apk-build/app/build/outputs/**/*.apk
-            apk-build/**/*.apk
+            android/app/build/outputs/apk/debug/*.apk
+            android/**/build/outputs/**/*.apk
             **/*.apk
+          if-no-files-found: warn
+      - name: List files for debug
+        if: always()
+        run: |
+          find . -name "*.apk" -o -name "*.aab" | head -20
+          ls -R | grep -E "\.apk|\.aab" | head -20
