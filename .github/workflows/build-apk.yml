@@ -11,19 +11,24 @@ jobs:
         with: 
           distribution: 'temurin'
           java-version: '17'
-      - name: Install deps
+      - name: Install dependencies
         run: npm install
-      - name: Add Android
+      - name: Build Android APK with Capacitor
         run: |
           npx cap init ClipViral com.clipviral.oneapp --web-dir=. --npm-client=npm || true
+          npm install @capacitor/android
           npx cap add android || true
           npx cap copy android
-      - name: Build APK
-        run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
-      - uses: actions/upload-artifact@v4
+          # Accept licenses
+          yes | sdkmanager --licenses || true
+          ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: Upload APK
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: clipviral-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            android/app/build/outputs/apk/debug/app-debug.apk
+            android/app/build/outputs/apk/debug/*.apk
